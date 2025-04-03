@@ -29,7 +29,7 @@ Qual a chance de VALE3 atingir 82 até 15/09/2025?
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/ssa-montecarlo-agent.git
+git clone https://github.com/raphaelroosewelt/ssa-montecarlo-agent.git
 cd ssa-montecarlo-agent
 ```
 
@@ -94,4 +94,4 @@ python ssa_montecarlo_app.py
 
 ---
 
-Feito com 💻 e ☕ por [Seu Nome]
+Feito com 💻 e ☕ por Raphael Roosewelt

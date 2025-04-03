@@ -6,6 +6,8 @@ from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 import gradio as gr
+import matplotlib.pyplot as plt
+import io
 
 load_dotenv()
 client = OpenAI()
@@ -83,19 +85,37 @@ def calculate_probability(symbol, strike, target_date, simulations=1_000_000, r=
     ST = S0 * np.exp((r - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)
     p_call = np.mean(ST >= strike) * 100
     p_put = 100 - p_call
-    return S0, sigma, T, delta_days, p_call, p_put
+    return S0, sigma, T, delta_days, p_call, p_put, ST
+
+def plot_distribution(ST, strike, S0):
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.hist(ST, bins=100, color="#4f81bd", alpha=0.7, edgecolor="black")
+    ax.axvline(strike, color="red", linestyle="--", label=f"Strike ({strike})")
+    ax.axvline(S0, color="green", linestyle=":", label=f"Atual ({S0:.2f})")
+    ax.axvline(np.mean(ST), color="orange", linestyle="-.", label=f"Média Simulada ({np.mean(ST):.2f})")
+    ax.set_title("Distribuição de Preços Simulados")
+    ax.set_xlabel("Preço Final do Ativo")
+    ax.set_ylabel("Frequência")
+    ax.legend()
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
 
 def run_agent_intelligent(query):
     params = extract_parameters_with_llm(query)
     if not params:
-        return "❌ Não foi possível entender sua pergunta. Tente ser mais específico."
+        return "❌ Não foi possível entender sua pergunta.", None
     try:
         symbol = params["symbol"]
         strike = float(params["strike"])
         date = datetime.strptime(params["date"], "%Y-%m-%d")
-        S0, sigma, T, delta_days, p_call, p_put = calculate_probability(symbol, strike, date)
+        S0, sigma, T, delta_days, p_call, p_put, ST = calculate_probability(symbol, strike, date)
 
-        return f"""
+        resumo = f"""
 📈 Ativo: {symbol}
 🎯 Preço alvo: {strike}
 🗓️ Data alvo: {date.strftime('%d/%m/%Y')}
@@ -104,15 +124,22 @@ def run_agent_intelligent(query):
 ⏳ Tempo até o vencimento: {delta_days} dias corridos ({T:.2f} anos úteis)
 📈 Probabilidade de atingir ou ultrapassar (CALL): {p_call:.2f}%
 📉 Probabilidade de não atingir (PUT): {p_put:.2f}%
+
+🧾 Interpretação do gráfico:
+- A linha vermelha representa o strike ({strike}) que o ativo deve atingir.
+- A linha verde pontilhada mostra o preço atual do ativo.
+- A linha laranja tracejada representa o preço médio estimado no vencimento com base nas simulações.
 """
+        plot = plot_distribution(ST, strike, S0)
+        return resumo, plot
     except Exception as e:
-        return f"❌ Erro: {e}"
+        return f"❌ Erro: {e}", None
 
 if __name__ == "__main__":
     gr.Interface(
         fn=run_agent_intelligent,
         inputs=gr.Textbox(lines=2, placeholder="Ex: Qual a chance da PETR4 bater 45 até o mês que vem?"),
-        outputs="text",
-        title="🧠 Agente SSA - Monte Carlo de Ativos",
-        description="Digite uma pergunta sobre um ativo, valor e data alvo."
+        outputs=["text", "image"],
+        title="Agente - Calcula a probabilidade de um ativo atingir o strike usando Monte Carlo",
+        description="Digite uma pergunta sobre um ativo, valor e data alvo. O gráfico mostra a distribuição dos preços simulados, com destaque para o strike, preço atual e média prevista."
     ).launch()
